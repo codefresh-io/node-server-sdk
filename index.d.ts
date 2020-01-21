@@ -55,6 +55,8 @@ declare module 'launchdarkly-node-server-sdk' {
    * @param client
    *   Pass this parameter if you already have a Redis client instance that you wish to reuse. In this case,
    *   `redisOpts` will be ignored.
+   * @param getLocalFeatureStore
+   *    In case redis is down we will get the localFeatureStore from mongodb
    *
    * @returns
    *   An object to put in the `featureStore` property for [[LDOptions]].
@@ -64,7 +66,8 @@ declare module 'launchdarkly-node-server-sdk' {
     cacheTTL?: number,
     prefix?: string,
     logger?: LDLogger | object,
-    client?: RedisClient
+    client?: RedisClient,
+    getLocalFeatureStore? : any,
   ): LDFeatureStore;
 
   /**
@@ -109,7 +112,7 @@ declare module 'launchdarkly-node-server-sdk' {
      *   The flag key.
      */
     getFlagReason(key: string): LDEvaluationReason;
-    
+
     /**
      * Returns a map of feature flag keys to values. If a flag would have evaluated to the
      * default value, its value will be null.
@@ -352,7 +355,7 @@ declare module 'launchdarkly-node-server-sdk' {
     /**
      * Additional parameters to pass to the Node HTTPS API for secure requests.  These can include any
      * of the TLS-related parameters supported by `https.request()`, such as `ca`, `cert`, and `key`.
-     * 
+     *
      * For more information, see the Node documentation for `https.request()` and `tls.connect()`.
      */
     tlsParams?: LDTLSOptions;
@@ -361,7 +364,7 @@ declare module 'launchdarkly-node-server-sdk' {
   /**
    * Additional parameters to pass to the Node HTTPS API for secure requests.  These can include any
    * of the TLS-related parameters supported by `https.request()`, such as `ca`, `cert`, and `key`.
-   * 
+   *
    * For more information, see the Node documentation for `https.request()` and `tls.connect()`.
    */
   export interface LDTLSOptions {
@@ -512,7 +515,7 @@ declare module 'launchdarkly-node-server-sdk' {
    * from LaunchDarkly. By default, it uses an in-memory implementation; there are also adapters
    * for Redis and other databases (see the [SDK Reference Guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store)).
    * You will not need to use this interface unless you are writing your own implementation.
-   * 
+   *
    * Feature store methods can and should call their callbacks directly whenever possible, rather
    * than deferring them with setImmediate() or process.nextTick(). This means that if for any
    * reason you are updating or querying a feature store directly in your application code (which
@@ -695,7 +698,7 @@ declare module 'launchdarkly-node-server-sdk' {
    *   value has changed for any particular user, only that some part of the flag configuration was changed.
    * - `"update:KEY"`: The client has received a change to the feature flag whose key is KEY. This is the
    *   same as `"update"` but allows you to listen for a specific flag.
-   * 
+   *
    * For more information, see the [SDK Reference Guide](http://docs.launchdarkly.com/docs/node-sdk-reference).
    */
   export interface LDClient extends EventEmitter {
@@ -731,7 +734,7 @@ declare module 'launchdarkly-node-server-sdk' {
      *
      * Note that you can also use event listeners ([[on]]) for the same purpose: the event `"ready"`
      * indicates success, and `"failed"` indicates failure.
-     * 
+     *
      * @returns
      *   A Promise that will be resolved if the client initializes successfully, or rejected if it
      *   fails. If successful, the result is the same client object.
@@ -889,7 +892,7 @@ declare module 'launchdarkly-node-server-sdk' {
      * parameter. As a result, specifying `metricValue` will not yet produce any different behavior
      * from omitting it. Refer to the [SDK reference guide](https://docs.launchdarkly.com/docs/node-sdk-reference#section-track)
      * for the latest status.
-     * 
+     *
      * If the user is omitted or has no key, the client will log a warning
      * and will not send an event.
      *
@@ -965,17 +968,17 @@ declare module 'launchdarkly-node-server-sdk' {
   /**
    * Creates an object that allows you to use local files as a source of feature flag state,
    * instead of connecting to LaunchDarkly. This would typically be used in a test environment.
-   * 
+   *
    * To use this component, call `FileDataSource(options)` and store the result in the `updateProcessor`
    * property of your LaunchDarkly client configuration:
-   * 
+   *
    *     var dataSource = LaunchDarkly.FileDataSource({ paths: [ myFilePath ] });
    *     var config = { updateProcessor: dataSource };
    *
    * This will cause the client not to connect to LaunchDarkly to get feature flags. The
    * client may still make network connections to send analytics events, unless you have disabled
    * this in your configuration with `send_events` or `offline`.
-   * 
+   *
    * The format of the data files is described in the SDK Reference Guide on
    * [Reading flags from a file](https://docs.launchdarkly.com/v2.0/docs/reading-flags-from-a-file).
    *

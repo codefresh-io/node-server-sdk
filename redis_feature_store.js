@@ -6,11 +6,11 @@ const redis = require('redis'),
 const noop = function(){};
 
 
-function RedisFeatureStore(redisOpts, cacheTTL, prefix, logger, preconfiguredClient) {
-  return new CachingStoreWrapper(new redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClient), cacheTTL);
+function RedisFeatureStore(redisOpts, cacheTTL, prefix, logger, preconfiguredClient, getLocalFeatureStore) {
+  return new CachingStoreWrapper(new redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClient, getLocalFeatureStore), cacheTTL);
 }
 
-function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClient) {
+function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClient, getLocalFeatureStore) {
 
   const client = preconfiguredClient || redisOpts.client || redis.createClient(redisOpts),
     store = {},
@@ -91,11 +91,23 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
 
   store.getAllInternal = (kind, cb) => {
     cb = cb || noop;
-    if (!connected) {
-      logger.warn('Attempted to fetch all keys while Redis connection is down');
-      cb(null);
-      return;
-    }
+      if (!connected) {
+          // modify the default behaviour to work against localFeatureStore
+          logger.warn('Attempted to fetch all keys while Redis connection is down');
+          getLocalFeatureStore()
+              .then((items) => {
+                  let localResults = {};
+                  if (kind.namespace === 'features') {
+                      localResults = items.features;
+                  } else {
+                      localResults = items.segments;
+                  }
+                  cb(localResults);
+              }, (err) => {
+                  console.log(err);
+                  cb(null);
+              });
+      }
 
     client.hgetall(itemsKey(kind), (err, obj) => {
       if (err) {
@@ -138,7 +150,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
     }
 
     multi.set(initedKey, '');
-    
+
     multi.exec(err => {
       if (err) {
         logger.error('Error initializing Redis store', err);
