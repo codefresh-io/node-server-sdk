@@ -31,25 +31,28 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
   client.on('error', err => {
     // Note that we *must* have an error listener or else any connection error will trigger an
     // uncaught exception.
-    logger.error('Redis error - ' + err);
+    logger.error('launchdarkly - Redis error - ' + err);
   });
   client.on('reconnecting', info => {
-    logger.info('Attempting to reconnect to Redis (attempt #' + info.attempt +
+    logger.info('launchdarkly - Attempting to reconnect to Redis (attempt #' + info.attempt +
       ', delay: ' + info.delay + 'ms)');
   });
   client.on('connect', () => {
+    logger.info('launchdarkly - Redis connected');
     if (!initialConnect) {
-      logger.warn('Reconnected to Redis');
+      logger.warn('launchdarkly - Reconnected to Redis');
     }
     initialConnect = false;
     connected = true;
   });
   client.on('end', () => {
+    logger.info('launchdarkly - Redis client is end');
     connected = false;
   });
 
   if (!redisOpts.client) {
     // Allow driver programs to exit, even if the Redis socket is active
+    logger.info('launchdarkly - Redis client unref');
     client.unref();
   }
 
@@ -62,14 +65,14 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
     cb = cb || noop;
 
     if (!connected) {
-      logger.warn('Attempted to fetch key ' + key + ' while Redis connection is down');
+      logger.warn('launchdarkly - Attempted to fetch key ' + key + ' while Redis connection is down');
       cb(null);
       return;
     }
 
     client.hget(itemsKey(kind), key, (err, obj) => {
       if (err) {
-        logger.error('Error fetching key ' + key + ' from Redis in \'' + kind.namespace + '\'', err);
+        logger.error('launchdarkly - Error fetching key ' + key + ' from Redis in \'' + kind.namespace + '\'', err);
         cb(null);
       } else {
         const item = JSON.parse(obj);
@@ -93,7 +96,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
     cb = cb || noop;
       if (!connected) {
           // modify the default behaviour to work against localFeatureStore
-          logger.warn('Attempted to fetch all keys while Redis connection is down');
+          logger.warn('launchdarkly - Attempted to fetch all keys while Redis connection is down');
           getLocalFeatureStore()
               .then((items) => {
                   let localResults = {};
@@ -111,7 +114,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
 
     client.hgetall(itemsKey(kind), (err, obj) => {
       if (err) {
-        logger.error('Error fetching \'' + kind.namespace + '\' from Redis', err);
+        logger.error('launchdarkly - Error fetching \'' + kind.namespace + '\' from Redis', err);
         cb(null);
       } else {
         const results = {},
@@ -153,7 +156,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
 
     multi.exec(err => {
       if (err) {
-        logger.error('Error initializing Redis store', err);
+        logger.error('launchdarkly - Error initializing Redis store', err);
       }
       cb();
     });
@@ -162,7 +165,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
   store.upsertInternal = (kind, item, cb) => {
     updateItemWithVersioning(kind, item, (err, attemptedWrite) => {
       if (err) {
-        logger.error('Error upserting key ' + item.key + ' in \'' + kind.namespace + '\'', err);
+        logger.error('launchdarkly - Error upserting key ' + item.key + ' in \'' + kind.namespace + '\'', err);
       }
       cb(err, attemptedWrite);
     });
@@ -183,7 +186,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
           multi.exec((err, replies) => {
             if (!err && replies === null) {
               // This means the EXEC failed because someone modified the watched key
-              logger.debug('Concurrent modification detected, retrying');
+              logger.debug('launchdarkly - Concurrent modification detected, retrying');
               updateItemWithVersioning(kind, newItem, cb);
             } else {
               cb(err, newItem);
@@ -202,6 +205,7 @@ function redisFeatureStoreInternal(redisOpts, prefix, logger, preconfiguredClien
   };
 
   store.close = () => {
+    logger.info('launchdarkly - Redis client quit');
     client.quit();
   };
 
